@@ -1,6 +1,13 @@
 # $passsword = $(Get-PASAccountPassword -id $(Get-PASAccount | Where-Object {$_.username -eq "CCPDBAuth01"}).id -Reason "REST TEST").Password
-#[void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
-Add-Type -AssemblyName PresentationFramework
+[void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
+#Add-Type -AssemblyName PresentationFramework
+
+
+#region Constants
+$CURRENT_DIRECTORY     = (Get-Location).Path
+$CONFIGURATION_FILE    = $CURRENT_DIRECTORY+"\PAM Password Picker.xml"
+$SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
+#endregion
 
 [xml]$XAML = @"
 
@@ -35,16 +42,35 @@ Add-Type -AssemblyName PresentationFramework
 
 "@
 #Read XAML
-$reader=(New-Object System.Xml.XmlNodeReader $xaml)
+[object]$reader=(New-Object System.Xml.XmlNodeReader $xaml)
 $Form=[Windows.Markup.XamlReader]::Load($reader)
 
 # Store Form Objects In PowerShell
 $xaml.SelectNodes("//*[@Name]") | ForEach-Object {Set-Variable -Name ($_.Name) -Value $Form.FindName($_.Name)}
 
-$password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
-$credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
+#Read XML Config
+try
+{
+    [xml]$xmlConfiguration = Get-Content -Path $CONFIGURATION_FILE -ErrorAction 'Stop'
+}
+catch
+{
+    [System.Windows.MessageBox]::Show("XML Configuration could not be loaded. \n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location")
+}
 
-New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk
+
+# Get parameter values from the external configuration
+#$BaseURI = $xmlConfiguration.SelectSingleNode("//configuration/connection/BaseUrl/"
+$BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
+$authType = $xmlConfiguration.configuration.authentication.type
+$logonUserName = $xmlConfiguration.configuration.authentication.username
+
+
+#$password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
+
+#$credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
+
+New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
 #New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $(Get-Credential) -type CyberArk
 
 $allSafes = Get-PASSafe -FindAll | Select-Object SafeName
@@ -97,9 +123,18 @@ $btnGet.add_Click(
                 Write-Host "Error Stuff"
             }
         }
-
     }
 )
 
+
+function Get-PlatformID
+{
+    $plaformID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).platformID
+}
+
+function [bool]ReasonMandatory()
+{
+
+}
 #show the dialog
 $Form.ShowDialog() | out-null
