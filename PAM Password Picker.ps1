@@ -65,13 +65,13 @@ $BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
 $authType = $xmlConfiguration.configuration.authentication.type
 $logonUserName = $xmlConfiguration.configuration.authentication.username
 
+                    # ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG
+                    #$password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
+                    #$credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
+                    #New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk
 
-#$password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
-
-#$credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
 
 New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
-#New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $(Get-Credential) -type CyberArk
 
 $allSafes = Get-PASSafe -FindAll | Select-Object SafeName
 
@@ -95,16 +95,16 @@ $cboxSelectSafe.add_SelectionChanged(
     }
 )
 $pasaccountID = $null
-$cboxSelectAccount.add_SelectionChanged(
-    {
 
-    }
-)
 $btnGet.add_Click(
     {
         $pasAccount = $cboxSelectAccount.SelectedItem
-        [string]$reason = $txtBoxReason.Text
-        if([string]::IsNullOrEmpty($reason))
+        [string]$reason = $txtBoxReason.Text # Reason provided in the text box
+        [string]$platformID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).platformID #plaftofm ID of the selected Account (needed to check if Reason is required)
+        [bool]$reasonRequired = $(Get-PASPlatform | Where-Object {($_.PlatformID -eq $platformID) -and ($PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive -eq $true)} | Select-Object {$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive}).'$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive'
+        #checks if providing a reason is mandatory for the selected account platform policy
+
+        if(($reasonRequired -eq $true) -and ([string]::IsNullOrEmpty($reason)))
         {
             [System.Windows.MessageBox]::Show('Please enter reason to proceed')
             return;
@@ -127,14 +127,6 @@ $btnGet.add_Click(
 )
 
 
-function Get-PlatformID
-{
-    $plaformID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).platformID
-}
 
-function [bool]ReasonMandatory()
-{
-
-}
 #show the dialog
 $Form.ShowDialog() | out-null
