@@ -61,28 +61,37 @@ catch
 
 # Get parameter values from the external configuration
 #$BaseURI = $xmlConfiguration.SelectSingleNode("//configuration/connection/BaseUrl/"
-$BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
-$authType = $xmlConfiguration.configuration.authentication.type
-$logonUserName = $xmlConfiguration.configuration.authentication.username
+#$BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
+#authType = $xmlConfiguration.configuration.authentication.type
+#$logonUserName = $xmlConfiguration.configuration.authentication.username
 
                     # ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG
-                    #$password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
-                    #$credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
-                    #New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk
+                    $password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
+                    $credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
 
 
-New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
+try
+{
+    #New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
+
+
+    # ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG
+    New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk #
+}
+catch
+{
+    [System.Windows.MessageBox]::Show('Unable to connect to the remote server')
+}
+
 
 $allSafes = Get-PASSafe -FindAll | Select-Object SafeName
-
-[string]$pasAccount = $null
-
 
 foreach($safe in $allSafes)
 {
     $cboxSelectSafe.Items.Add($safe.SafeName)
 }
 
+[string]$pasAccount = $null
 $cboxSelectSafe.add_SelectionChanged(
     {
         $selectedSafe = $cboxSelectSafe.SelectedItem
@@ -94,9 +103,18 @@ $cboxSelectSafe.add_SelectionChanged(
         }
     }
 )
-$pasaccountID = $null
 
-$btnGet.add_Click(
+[string]$cboxSelectAccount.Add_SelectionChanged(
+    {
+        $pasAccount = $cboxSelectAccount.SelectedItem
+        return $pasAccount
+    }
+)
+
+
+$pasAccountID = $null
+
+$btnGet.Add_Click(
     {
         $pasAccount = $cboxSelectAccount.SelectedItem
         [string]$reason = $txtBoxReason.Text # Reason provided in the text box
@@ -104,19 +122,22 @@ $btnGet.add_Click(
         [bool]$reasonRequired = $(Get-PASPlatform | Where-Object {($_.PlatformID -eq $platformID) -and ($PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive -eq $true)} | Select-Object {$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive}).'$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive'
         #checks if providing a reason is mandatory for the selected account platform policy
 
-        if(($reasonRequired -eq $true) -and ([string]::IsNullOrEmpty($reason)))
+        if($reasonRequired -eq $true)
         {
-            [System.Windows.MessageBox]::Show('Please enter reason to proceed')
-            return;
+            if([string]::IsNullOrEmpty($reason))
+            {
+                [System.Windows.MessageBox]::Show('Please enter a reason to proceed')
+                return;
+            }
         }
         if(($pasAccount -ne $null) -or ($pasAccount -ne ""))
         {
-            $pasaccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+            $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
             try
             {
-
-                $password = $(Get-PASAccountPassword -AccountID $pasaccountID -Reason $reason).Password
+                $password = $(Get-PASAccountPassword -AccountID $pasAccountID -Reason $reason).Password
                 $txtBoxPassword.text = $password
+                return $pasAccountID
             }
             catch
             {
@@ -127,6 +148,25 @@ $btnGet.add_Click(
 )
 
 
+$Form.Add_Closing(
+    {param($sender,$e)
+            $result = [System.Windows.Forms.MessageBox]::Show(`
+                "Are you sure you want to exit?", `
+                "Close", [System.Windows.Forms.MessageBoxButtons]::YesNoCancel)
+            if ($result -ne [System.Windows.Forms.DialogResult]::Yes)
+            {
+                $e.Cancel= $true
+            }
+            <# if($pasAccountID -ne $null)
+            {
+                $pasAccount = $cboxSelectAccount.SelectedItem
+                $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+                [System.Windows.MessageBox]::Show('pasAccount = ' + $pasAccount)
+                [System.Windows.MessageBox]::Show('pasAccountID = ' + $pasAccountID)
+            } #>
+            Unlock-PASAccount -AccountID $pasAccountID -Confirm $false
+    }
+)
 
 #show the dialog
 $Form.ShowDialog() | out-null
