@@ -1,5 +1,7 @@
 # $passsword = $(Get-PASAccountPassword -id $(Get-PASAccount | Where-Object {$_.username -eq "CCPDBAuth01"}).id -Reason "REST TEST").Password
 [void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
+[void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
+[void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 #Add-Type -AssemblyName PresentationFramework
 
 
@@ -33,10 +35,11 @@ $SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
         <Label Name="lblSelectAccount" Content="Select Account" HorizontalAlignment="Left" Margin="42,0,0,0" VerticalAlignment="Center" Height="26" Width="88"/>
         <ComboBox Name="cboxSelectSafe" Grid.ColumnSpan="3" HorizontalAlignment="Left" Margin="142,25,0,0" VerticalAlignment="Top" Width="266" Height="22"/>
         <ComboBox Name="cboxSelectAccount" Grid.ColumnSpan="3" HorizontalAlignment="Left" Margin="142,0,0,0" VerticalAlignment="Center" Width="263" Height="22"/>
-        <Button Name="btnGet" Content="Fetch Password" HorizontalAlignment="Left" VerticalAlignment="Top" Height="38" Width="128" Grid.Row="3" Margin="33,30,0,0"/>
-        <TextBox Name="txtBoxPassword" HorizontalAlignment="Left" Margin="72,30,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="126" Height="38" IsReadOnly="True" Grid.Row="3" Grid.Column="2" Text="Password" SelectionOpacity="0.1"/>
+        <Button Name="btnGet" Content="Fetch Password" HorizontalAlignment="Left" VerticalAlignment="Top" Height="38" Width="128" Grid.Row="2" Margin="33,16,0,0" Grid.RowSpan="2"/>
+        <TextBox Name="txtBoxPassword" HorizontalAlignment="Left" Margin="72,16,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="126" Height="38" IsReadOnly="True" Grid.Row="2" Grid.Column="2" Text="Password" SelectionOpacity="0.1" Grid.RowSpan="2"/>
         <Label Name="lblReason" Content="Reason" HorizontalAlignment="Left" Margin="73,111,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.793,-0.23" Height="26" Width="48"/>
-        <TextBox Name="txtBoxReason" HorizontalAlignment="Left" Margin="142,115,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="263" Grid.ColumnSpan="3" Height="18"/>
+        <TextBox Name="txtBoxReason" HorizontalAlignment="Left" Margin="142,115,0,0" Text="Reason" TextWrapping="Wrap" VerticalAlignment="Top" Width="263" Grid.ColumnSpan="3" Height="18"/>
+        <Button Name="btnCheckIn" Content="Account Check-In" HorizontalAlignment="Left" VerticalAlignment="Top" Height="38" Width="128" Grid.Row="3" Margin="33,30,0,0"/>
     </Grid>
 </Window>
 
@@ -86,14 +89,23 @@ catch
 
 $allSafes = Get-PASSafe -FindAll | Select-Object SafeName
 
-foreach($safe in $allSafes)
+<# foreach($safe in $allSafes)
 {
     $cboxSelectSafe.Items.Add($safe.SafeName)
-}
-
+} #>
+$cboxSelectSafe.Add_DropDownOpened(
+    {
+        $cboxSelectSafe.items.Clear()
+        foreach($safe in $allSafes)
+        {
+            $cboxSelectSafe.Items.Add($safe.SafeName)
+        }
+    }
+)
 [string]$pasAccount = $null
 $cboxSelectSafe.add_SelectionChanged(
     {
+        $txtBoxPassword.Clear()
         $selectedSafe = $cboxSelectSafe.SelectedItem
         $cboxSelectAccount.Items.Clear()
 
@@ -104,13 +116,14 @@ $cboxSelectSafe.add_SelectionChanged(
     }
 )
 
+
 [string]$cboxSelectAccount.Add_SelectionChanged(
     {
+        $txtBoxPassword.Clear()
         $pasAccount = $cboxSelectAccount.SelectedItem
         return $pasAccount
     }
 )
-
 
 $pasAccountID = $null
 
@@ -147,24 +160,45 @@ $btnGet.Add_Click(
     }
 )
 
+<#
+FormClosing() event listener.
 
+# -- displays confirmation window
+# -- checks in the exclusive account using the pasAccountID value and closes the form.
+#>
 $Form.Add_Closing(
     {param($sender,$e)
             $result = [System.Windows.Forms.MessageBox]::Show(`
                 "Are you sure you want to exit?", `
                 "Close", [System.Windows.Forms.MessageBoxButtons]::YesNoCancel)
-            if ($result -ne [System.Windows.Forms.DialogResult]::Yes)
+            if($result -eq [System.Windows.Forms.DialogResult]::Yes)
+            {
+                if($pasAccountID -ne $null)
+                {
+                    $pasAccount = $cboxSelectAccount.SelectedItem
+                    $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+                    Unlock-PASAccount -AccountID $pasAccountID
+                }
+            }
+            else
             {
                 $e.Cancel= $true
             }
-            <# if($pasAccountID -ne $null)
-            {
-                $pasAccount = $cboxSelectAccount.SelectedItem
-                $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
-                [System.Windows.MessageBox]::Show('pasAccount = ' + $pasAccount)
-                [System.Windows.MessageBox]::Show('pasAccountID = ' + $pasAccountID)
-            } #>
-            Unlock-PASAccount -AccountID $pasAccountID -Confirm $false
+
+    }
+)
+<#
+Release account button onClick() event listener.
+# -- clears textboxes
+# -- checks in the exclusive account using the pasAccountID value
+#>
+$btnCheckIn.Add_Click(
+    {
+        $pasAccount = $cboxSelectAccount.SelectedItem
+        $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+        $txtBoxPassword.Clear()
+        $txtBoxReason.Clear()
+        Unlock-PASAccount -AccountID $pasAccountID
     }
 )
 
