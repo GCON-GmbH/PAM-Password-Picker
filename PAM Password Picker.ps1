@@ -2,6 +2,7 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
+[void][System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
 #Add-Type -AssemblyName PresentationFramework
 
 
@@ -150,6 +151,7 @@ $btnGet.Add_Click(
             {
                 $password = $(Get-PASAccountPassword -AccountID $pasAccountID -Reason $reason).Password
                 $txtBoxPassword.text = $password
+                $timer.Start()
                 return $pasAccountID
             }
             catch
@@ -170,7 +172,7 @@ $Form.Add_Closing(
     {param($sender,$e)
             $result = [System.Windows.Forms.MessageBox]::Show(`
                 "Are you sure you want to exit?", `
-                "Close", [System.Windows.Forms.MessageBoxButtons]::YesNoCancel)
+                "Close", [System.Windows.Forms.MessageBoxButtons]::YesNo)
             if($result -eq [System.Windows.Forms.DialogResult]::Yes)
             {
                 if($pasAccountID -ne $null)
@@ -201,6 +203,19 @@ $btnCheckIn.Add_Click(
         Unlock-PASAccount -AccountID $pasAccountID
     }
 )
+
+
+$timer = New-Object System.Timers.Timer
+#$timer.AutoReset = $true
+$timer.Interval = 3000 #600000
+$timer.Enabled = $true
+
+$timer.Add_Elapsed(
+    {
+        [System.Windows.MessageBox]::Show("Timer Elapsed")
+    }
+)
+
 
 #show the dialog
 $Form.ShowDialog() | out-null
