@@ -3,6 +3,8 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
+[void][System.Reflection.Assembly]::LoadWithPartialName("System")
+
 #Add-Type -AssemblyName PresentationFramework
 
 
@@ -59,7 +61,7 @@ try
 }
 catch
 {
-    [System.Windows.MessageBox]::Show("XML Configuration could not be loaded. \n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location")
+    [System.Windows.Forms.MessageBox]::Show("XML Configuration could not be loaded. \n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location", [System.Windows.Forms.MessageBoxIcon]::Error)
 }
 
 
@@ -79,21 +81,18 @@ try
     #New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
 
 
-    # ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG
+    <# ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG      #>
     New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk #
 }
 catch
 {
-    [System.Windows.MessageBox]::Show('Unable to connect to the remote server')
+    [System.Windows.Forms.MessageBox]::Show('Unable to connect to the remote server', `
+    [System.Windows.Forms.MessageBoxIcon]::Error)
 }
 
 
 $allSafes = Get-PASSafe -FindAll | Select-Object SafeName
 
-<# foreach($safe in $allSafes)
-{
-    $cboxSelectSafe.Items.Add($safe.SafeName)
-} #>
 $cboxSelectSafe.Add_DropDownOpened(
     {
         $cboxSelectSafe.items.Clear()
@@ -107,7 +106,7 @@ $cboxSelectSafe.Add_DropDownOpened(
 $cboxSelectSafe.add_SelectionChanged(
     {
         $txtBoxPassword.Clear()
-        $selectedSafe = $cboxSelectSafe.SelectedItem
+        $global:selectedSafe = $cboxSelectSafe.SelectedItem
         $cboxSelectAccount.Items.Clear()
 
         foreach($account in (Get-PASAccount -safeName $selectedSafe | Select-Object userName))
@@ -121,8 +120,8 @@ $cboxSelectSafe.add_SelectionChanged(
 [string]$cboxSelectAccount.Add_SelectionChanged(
     {
         $txtBoxPassword.Clear()
-        $pasAccount = $cboxSelectAccount.SelectedItem
-        return $pasAccount
+        $global:pasAccount = $cboxSelectAccount.SelectedItem
+        return $global:pasAccount
     }
 )
 
@@ -130,7 +129,7 @@ $pasAccountID = $null
 
 $btnGet.Add_Click(
     {
-        $pasAccount = $cboxSelectAccount.SelectedItem
+
         [string]$reason = $txtBoxReason.Text # Reason provided in the text box
         [string]$platformID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).platformID #plaftofm ID of the selected Account (needed to check if Reason is required)
         [bool]$reasonRequired = $(Get-PASPlatform | Where-Object {($_.PlatformID -eq $platformID) -and ($PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive -eq $true)} | Select-Object {$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive}).'$PSItem.details.PrivilegedAccessWorkflows.RequireUsersToSpecifyReasonForAccess.IsActive'
@@ -144,41 +143,48 @@ $btnGet.Add_Click(
                 return;
             }
         }
-        if(($pasAccount -ne $null) -or ($pasAccount -ne ""))
+        if($pasAccount -ne $null)
         {
-            $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+            $global:pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
             try
             {
                 $password = $(Get-PASAccountPassword -AccountID $pasAccountID -Reason $reason).Password
                 $txtBoxPassword.text = $password
                 $timer.Start()
-                return $pasAccountID
+
+                return $global:pasAccountID
             }
             catch
             {
-                Write-Host "Error Stuff"
+                Write-Host "Error Stuff" ##  This needs to be either log (requires some logger class or FN, or error message)
             }
+        }
+        else
+        {
+            [System.Windows.Forms.MessageBox]::Show('Please Select Account', `
+            "Ooops", `
+            [System.Windows.Forms.MessageBoxButtons]::OK, `
+            [System.Windows.Forms.MessageBoxIcon]::Error)
         }
     }
 )
 
 <#
-FormClosing() event listener.
-
-# -- displays confirmation window
-# -- checks in the exclusive account using the pasAccountID value and closes the form.
+-- Event listener
+-- displays confirmation window
+-- checks in the exclusive account using the pasAccountID value and closes the form.
 #>
 $Form.Add_Closing(
     {param($sender,$e)
             $result = [System.Windows.Forms.MessageBox]::Show(`
                 "Are you sure you want to exit?", `
-                "Close", [System.Windows.Forms.MessageBoxButtons]::YesNo)
+                "Close", [System.Windows.Forms.MessageBoxButtons]::YesNo, `
+                [System.Windows.Forms.MessageBoxIcon]::Question)
+
             if($result -eq [System.Windows.Forms.DialogResult]::Yes)
             {
                 if($pasAccountID -ne $null)
                 {
-                    $pasAccount = $cboxSelectAccount.SelectedItem
-                    $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
                     Unlock-PASAccount -AccountID $pasAccountID
                 }
             }
@@ -196,26 +202,37 @@ Release account button onClick() event listener.
 #>
 $btnCheckIn.Add_Click(
     {
-        $pasAccount = $cboxSelectAccount.SelectedItem
-        $pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
-        $txtBoxPassword.Clear()
-        $txtBoxReason.Clear()
-        Unlock-PASAccount -AccountID $pasAccountID
+        #$pasAccount = $cboxSelectAccount.SelectedItem
+        #$pasAccountID = $(Get-PASAccount | Where-Object {$_.username -eq $pasAccount}).id
+        if($pasAccountID -ne $null)
+        {
+            $txtBoxPassword.Clear()
+            $txtBoxReason.Clear()
+            Unlock-PASAccount -AccountID $pasAccountID
+        }
+        else
+        {
+            [System.Windows.Forms.MessageBox]::Show('Please Select Account', `
+            "Ooops", `
+            [System.Windows.Forms.MessageBoxButtons]::OK, `
+            [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+
     }
 )
 
-
-$timer = New-Object System.Timers.Timer
-#$timer.AutoReset = $true
-$timer.Interval = 3000 #600000
+<#Timer to check in account after N milliseconds after the timer is started. N is defined in MinValidityPeriod #>
+$timer = New-Object Timers.Timer
+$timer.Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod
+$timer.AutoReset = $false
 $timer.Enabled = $true
-
-$timer.Add_Elapsed(
+$timer.add_Elapsed(
     {
-        [System.Windows.MessageBox]::Show("Timer Elapsed")
+        [System.Windows.Forms.MessageBox]::Show("Timer Elapsed")
     }
 )
 
+$timer.Start()
 
 #show the dialog
 $Form.ShowDialog() | out-null
