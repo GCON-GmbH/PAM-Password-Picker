@@ -5,7 +5,7 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System")
 
-#Add-Type -AssemblyName PresentationFramework
+Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module
 
 
 #region Constants
@@ -226,13 +226,12 @@ $timer = New-Object Timers.Timer
 $timer.Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod
 $timer.AutoReset = $false
 $timer.Enabled = $true
+
 $timer.add_Elapsed(
     {
         [System.Windows.Forms.MessageBox]::Show("Timer Elapsed")
     }
 )
-
-$timer.Start()
 
 #show the dialog
 $Form.ShowDialog() | out-null
