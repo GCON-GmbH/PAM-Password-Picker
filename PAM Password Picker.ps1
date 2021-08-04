@@ -5,15 +5,41 @@
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Timers")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System")
 
-Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module
-
 
 #region Constants
 $CURRENT_DIRECTORY     = (Get-Location).Path
 $CONFIGURATION_FILE    = $CURRENT_DIRECTORY+"\PAM Password Picker.xml"
 $SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
+[object]$PSPASMINVER   = @([PSCustomObject]@{Major = 5; Minor=2; Build = 52; Revision = -1})
 #endregion
 
+#region Install and load PSPAS module:
+
+if(Get-Module -ListAvailable -Name psPAS) # check if the module isn't already installed; if so :
+{
+    $modules = (Get-Module -ListAvailable -Name psPAS | Select-Object Version) # Get the version of all available installed psPAS modules (more than one can coexist)
+    if(-not (($modules.version.major -eq $PSPASMINVER.major) -and ($modules.version.minor -eq $PSPASMINVER.minor))) # if Major.Minor versions don't match
+    {
+        $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent()) #Get current user running the script
+        if($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -eq $true) #Checks for admin rights, if current user is in Local Admins, then
+        {
+            Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module # Install the psPAS module with min required version
+        }
+        else # Displays an error message that the module is missing and we need to be admin
+        {
+            [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
+            Please run the script as Administrator to install the required module', `
+            'Module psPAS missing', `
+            [System.Windows.Forms.MessageBoxButtons]::OK, `
+            [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    # else - the module is installed and the version is right
+    Write-Host ("# else - the module is installed and the version is right")
+    }
+
+}
+#endregion
+#region UI
 [xml]$XAML = @"
 
 <Window
@@ -47,6 +73,9 @@ $SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
 </Window>
 
 "@
+
+#endregion
+
 #Read XAML
 [object]$reader=(New-Object System.Xml.XmlNodeReader $xaml)
 $Form=[Windows.Markup.XamlReader]::Load($reader)
@@ -162,7 +191,7 @@ $btnGet.Add_Click(
         else
         {
             [System.Windows.Forms.MessageBox]::Show('Please Select Account', `
-            "Ooops", `
+            'Ooops', `
             [System.Windows.Forms.MessageBoxButtons]::OK, `
             [System.Windows.Forms.MessageBoxIcon]::Error)
         }
@@ -224,7 +253,7 @@ $btnCheckIn.Add_Click(
 <#Timer to check in account after N milliseconds after the timer is started. N is defined in MinValidityPeriod #>
 $timer = New-Object Timers.Timer
 $timer.Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod
-$timer.AutoReset = $false
+#$timer.AutoReset = $false
 $timer.Enabled = $true
 
 $timer.add_Elapsed(
