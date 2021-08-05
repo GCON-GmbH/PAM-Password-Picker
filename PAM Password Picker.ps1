@@ -230,18 +230,20 @@ $btnGet.Add_Click(
                 $password = $(Get-PASAccountPassword -AccountID $pasAccountID -Reason $reason).Password
                 $txtBoxPassword.text = $password
                 $timer.Start()
-
-                return $global:pasAccountID
+                #return $global:pasAccountID
             }
             catch
             {
-                Write-Host "Error Stuff" ##  This needs to be either log (requires some logger class or FN, or error message)
+                [System.Windows.Forms.MessageBox]::Show('Unable to retrieve the password for the selected account', `
+                'Something went wrong', `
+                [System.Windows.Forms.MessageBoxButtons]::OK, `
+                [System.Windows.Forms.MessageBoxIcon]::Error)
             }
         }
         else
         {
             [System.Windows.Forms.MessageBox]::Show('Please Select Account', `
-            'Ooops', `
+            'Account not selected', `
             [System.Windows.Forms.MessageBoxButtons]::OK, `
             [System.Windows.Forms.MessageBoxIcon]::Error)
         }
@@ -299,16 +301,21 @@ $btnCheckIn.Add_Click(
 )
 
 <#Timer to check in account after N milliseconds after the timer is started. N is defined in MinValidityPeriod #>
-$timer = New-Object Timers.Timer
-$timer.Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod
-#$timer.AutoReset = $false
-$timer.Enabled = $true
-
-$timer.add_Elapsed(
-    {
-        [System.Windows.Forms.MessageBox]::Show("Timer Elapsed")
+$global:timer = New-Object System.Timers.Timer -Property @{
+    Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod -as [double];
+    Autoreset = $false;
+    Enabled = $true;
+    #SynchronizingObject = $Form
+}
+    $global:sourceIdentifier = 'TimerEvent'
+    $global:timeout = 100
+$action = {
+    Write-Host "[$(Get-Date)] Timer Elapsed"
+    Unlock-PASAccount -AccountID $global:pasAccountID
+    $timer.Stop()
+    Unregister-Event $global:sourceIdentifier
     }
-)
+Register-ObjectEvent -InputObject $timer -EventName Elapsed -SourceIdentifier $sourceIdentifier -Action $action
 
 #show the dialog
 $Form.ShowDialog() | out-null
