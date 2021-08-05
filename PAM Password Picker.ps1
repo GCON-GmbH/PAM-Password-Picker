@@ -1,4 +1,3 @@
-# $passsword = $(Get-PASAccountPassword -id $(Get-PASAccount | Where-Object {$_.username -eq "CCPDBAuth01"}).id -Reason "REST TEST").Password
 [void][System.Reflection.Assembly]::LoadWithPartialName('presentationframework')
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void][System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms")
@@ -13,32 +12,7 @@ $SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
 [object]$PSPASMINVER   = @([PSCustomObject]@{Major = 5; Minor=2; Build = 52; Revision = -1})
 #endregion
 
-#region Install and load PSPAS module:
 
-if(Get-Module -ListAvailable -Name psPAS) # check if the module isn't already installed; if so :
-{
-    $modules = (Get-Module -ListAvailable -Name psPAS | Select-Object Version) # Get the version of all available installed psPAS modules (more than one can coexist)
-    if(-not (($modules.version.major -eq $PSPASMINVER.major) -and ($modules.version.minor -eq $PSPASMINVER.minor))) # if Major.Minor versions don't match
-    {
-        $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent()) #Get current user running the script
-        if($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -eq $true) #Checks for admin rights, if current user is in Local Admins, then
-        {
-            Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module # Install the psPAS module with min required version
-        }
-        else # Displays an error message that the module is missing and we need to be admin
-        {
-            [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
-            Please run the script as Administrator to install the required module', `
-            'Module psPAS missing', `
-            [System.Windows.Forms.MessageBoxButtons]::OK, `
-            [System.Windows.Forms.MessageBoxIcon]::Error)
-        }
-    # else - the module is installed and the version is right
-    Write-Host ("# else - the module is installed and the version is right")
-    }
-
-}
-#endregion
 #region UI
 [xml]$XAML = @"
 
@@ -93,30 +67,104 @@ catch
     [System.Windows.Forms.MessageBox]::Show("XML Configuration could not be loaded. \n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location", [System.Windows.Forms.MessageBoxIcon]::Error)
 }
 
+#region Install and load PSPAS module:
 
-# Get parameter values from the external configuration
-#$BaseURI = $xmlConfiguration.SelectSingleNode("//configuration/connection/BaseUrl/"
-#$BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
-#authType = $xmlConfiguration.configuration.authentication.type
-#$logonUserName = $xmlConfiguration.configuration.authentication.username
+[bool]$isAdmin = $false
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent()) #Get current user running the script
+if($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) -eq $true)
+{
+    $isAdmin = $true  #Checks  current user has Admin rights to install the module
+}
+if((Get-Module -ListAvailable -Name psPAS) -eq $null) # check if the module isn't already installed; if not :
+{
+        if($isAdmin)
+        {
+            try
+            {
+                Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module # Install the psPAS module with min required version
+            }
+            catch
+            {
+                [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module \n
+                Please verify the module is install and loaded or ensure internet connection to install it.', `
+                'Module psPAS missing', `
+                [System.Windows.Forms.MessageBoxButtons]::OK, `
+                [System.Windows.Forms.MessageBoxIcon]::Error)
+            }
+        }
+        else # Displays an error message that the module is missing and we need to have admin rights
+        {
+            [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
+            Please run the script as Administrator to install the required module', `
+            'Module psPAS missing', `
+            [System.Windows.Forms.MessageBoxButtons]::OK, `
+            [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+}
+else
+{
+    $modules = (Get-Module -ListAvailable -Name psPAS | Select-Object Version) # Get the version of all available installed psPAS modules (more than one can coexist)
+    foreach($module in $modules)
+    {
+        if(-not (($modules.version.major -eq $PSPASMINVER.major) -and ($modules.version.minor -eq $PSPASMINVER.minor))) # if Major.Minor versions don't match
+        {
+            if($isAdmin -eq $true)
+            {
+                try
+                {
+                    Update-Module -Name psPAS -RequiredVersion 5.2.54
+                }
+                catch
+                {
+                    [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module \n
+                    Please verify the module is install and loaded or ensure internet connection to install it.', `
+                    'Module psPAS missing', `
+                    [System.Windows.Forms.MessageBoxButtons]::OK, `
+                    [System.Windows.Forms.MessageBoxIcon]::Error)
+                }
+            }
+            else # Displays an error message that the module is missing and we need to be admin
+            {
+                [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
+                Please run the script as Administrator to install the required module', `
+                'Module psPAS missing', `
+                [System.Windows.Forms.MessageBoxButtons]::OK, `
+                [System.Windows.Forms.MessageBoxIcon]::Error)
+            }
+        }
+    }
+}
+#endregion
+
+
+<# Get parameter values from the external configuration
+$BaseURI = $xmlConfiguration.SelectSingleNode("//configuration/connection/BaseUrl/"
+$BaseURI = $xmlConfiguration.configuration.connection.BaseUrl
+authType = $xmlConfiguration.configuration.authentication.type
+$logonUserName = $xmlConfiguration.configuration.authentication.username #>
 
                     # ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG
                     $password = ConvertTo-SecureString 'Gc0n21#' -AsPlainText -Force
                     $credential = New-Object System.Management.Automation.PSCredential ('APIUser', $password)
 
 
+
+# ----- Establish a REST session to the PVWA server
 try
 {
     #New-PASSession -BaseURI $BaseURI -Credential $logonUserName -type $authType
 
-
     <# ACHTUNG! -->>> DELETE THESE CONNECTION STRINGS IN THE FINAL RELEASE <<<-- ACHTUNG      #>
-    New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk #
+    New-PASSession -BaseURI https://pvwa01.lab.test.local -Credential $credential -type CyberArk
 }
 catch
 {
     [System.Windows.Forms.MessageBox]::Show('Unable to connect to the remote server', `
+    'Connection Error',`
+    [System.Windows.Forms.MessageBoxButtons]::OK,
     [System.Windows.Forms.MessageBoxIcon]::Error)
+
+    exit
 }
 
 
@@ -137,10 +185,12 @@ $cboxSelectSafe.add_SelectionChanged(
         $txtBoxPassword.Clear()
         $global:selectedSafe = $cboxSelectSafe.SelectedItem
         $cboxSelectAccount.Items.Clear()
-
-        foreach($account in (Get-PASAccount -safeName $selectedSafe | Select-Object userName))
+        if($selectedSafe -ne $null)
         {
-            $cboxSelectAccount.Items.Add($account.userName)
+            foreach($account in (Get-PASAccount -safeName $selectedSafe | Select-Object userName))
+            {
+                $cboxSelectAccount.Items.Add($account.userName)
+            }
         }
     }
 )
@@ -221,7 +271,6 @@ $Form.Add_Closing(
             {
                 $e.Cancel= $true
             }
-
     }
 )
 <#
@@ -246,7 +295,6 @@ $btnCheckIn.Add_Click(
             [System.Windows.Forms.MessageBoxButtons]::OK, `
             [System.Windows.Forms.MessageBoxIcon]::Error)
         }
-
     }
 )
 
