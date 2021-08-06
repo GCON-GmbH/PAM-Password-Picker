@@ -304,11 +304,11 @@ $btnCheckIn.Add_Click(
 $global:timer = New-Object System.Timers.Timer -Property @{
     Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod -as [double];
     Autoreset = $false;
-    Enabled = $true;
+    Enabled = $false;
     #SynchronizingObject = $Form
 }
     $global:sourceIdentifier = 'TimerEvent'
-    $global:timeout = 100
+    #$global:timeout = 100
 $action = {
     Write-Host "[$(Get-Date)] Timer Elapsed"
     Unlock-PASAccount -AccountID $global:pasAccountID
