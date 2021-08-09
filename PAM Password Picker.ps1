@@ -8,7 +8,6 @@
 #region Constants
 $CURRENT_DIRECTORY     = (Get-Location).Path
 $CONFIGURATION_FILE    = $CURRENT_DIRECTORY+"\PAM Password Picker.xml"
-$SCHEMA_FILE           = $CURRENT_DIRECTORY+"\PAM Password Picker.xsd"
 [object]$PSPASMINVER   = @([PSCustomObject]@{Major = 5; Minor=2; Build = 52; Revision = -1})
 #endregion
 
