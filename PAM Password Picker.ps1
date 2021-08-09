@@ -64,7 +64,7 @@ try
 }
 catch
 {
-    [System.Windows.Forms.MessageBox]::Show("XML Configuration could not be loaded. \n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location", [System.Windows.Forms.MessageBoxIcon]::Error)
+    [System.Windows.Forms.MessageBox]::Show("XML Configuration could not be loaded. `n Make sure the file " +  $CONFIGURATION_FILE + " exists in the script location", [System.Windows.Forms.MessageBoxIcon]::Error)
 }
 
 #region Install and load PSPAS module:
@@ -81,29 +81,29 @@ if((Get-Module -ListAvailable -Name psPAS) -eq $null) # check if the module isn'
         {
             try
             {
-                Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module # Install the psPAS module with min required version
+                Find-Module -Name psPAS -MinimumVersion 5.2.54 | Install-Module -Force # Install the psPAS module with min required version
             }
             catch
             {
-                [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module \n
-                Please verify the module is install and loaded or ensure internet connection to install it.', `
+                [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module. Please verify the module is installed and loaded or make sure internet connection is availabe to download and install it.', `
                 'Module psPAS missing', `
                 [System.Windows.Forms.MessageBoxButtons]::OK, `
                 [System.Windows.Forms.MessageBoxIcon]::Error)
+                exit
             }
         }
         else # Displays an error message that the module is missing and we need to have admin rights
         {
-            [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
-            Please run the script as Administrator to install the required module', `
+            [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed. Please run the script as Administrator to install the required module', `
             'Module psPAS missing', `
             [System.Windows.Forms.MessageBoxButtons]::OK, `
             [System.Windows.Forms.MessageBoxIcon]::Error)
+            exit
         }
 }
 else
 {
-    $modules = (Get-Module -ListAvailable -Name psPAS | Select-Object Version) # Get the version of all available installed psPAS modules (more than one can coexist)
+    $modules = (Get-Module -ListAvailable -Name psPAS | Select-Object Version) # If a psPAS module is installed get the version of all installed psPAS modules (more than one can coexist)
     foreach($module in $modules)
     {
         if(-not (($modules.version.major -eq $PSPASMINVER.major) -and ($modules.version.minor -eq $PSPASMINVER.minor))) # if Major.Minor versions don't match
@@ -112,12 +112,11 @@ else
             {
                 try
                 {
-                    Update-Module -Name psPAS -RequiredVersion 5.2.54
+                    Update-Module -Name psPAS -RequiredVersion 5.2.54 -Force
                 }
                 catch
                 {
-                    [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module \n
-                    Please verify the module is install and loaded or ensure internet connection to install it.', `
+                    [System.Windows.Forms.MessageBox]::Show('Unexpected error ocurred. Unable to load psPAS module. Please verify the module is installed and loaded or make sure internet connection is availabe to download and install it.', `
                     'Module psPAS missing', `
                     [System.Windows.Forms.MessageBoxButtons]::OK, `
                     [System.Windows.Forms.MessageBoxIcon]::Error)
@@ -125,8 +124,7 @@ else
             }
             else # Displays an error message that the module is missing and we need to be admin
             {
-                [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed \n
-                Please run the script as Administrator to install the required module', `
+                [System.Windows.Forms.MessageBox]::Show('Powershell module psPAS is not installed. Please run the script as Administrator to install the required module', `
                 'Module psPAS missing', `
                 [System.Windows.Forms.MessageBoxButtons]::OK, `
                 [System.Windows.Forms.MessageBoxIcon]::Error)
@@ -229,7 +227,7 @@ $btnGet.Add_Click(
             {
                 $password = $(Get-PASAccountPassword -AccountID $pasAccountID -Reason $reason).Password
                 $txtBoxPassword.text = $password
-                $timer.Start()
+                StartTimer;
                 #return $global:pasAccountID
             }
             catch
@@ -300,22 +298,17 @@ $btnCheckIn.Add_Click(
     }
 )
 
-<#Timer to check in account after N milliseconds after the timer is started. N is defined in MinValidityPeriod #>
-$global:timer = New-Object System.Timers.Timer -Property @{
-    Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod -as [double];
-    Autoreset = $false;
-    Enabled = $true;
-    #SynchronizingObject = $Form
+$Global:timer = New-Object System.Windows.Forms.Timer -Property @{
+    Interval = $xmlConfiguration.configuration.policy.MinValidityPeriod -as [int]
 }
-    $global:sourceIdentifier = 'TimerEvent'
-    $global:timeout = 100
-$action = {
-    Write-Host "[$(Get-Date)] Timer Elapsed"
-    Unlock-PASAccount -AccountID $global:pasAccountID
+$timer.Add_Tick({
+    Unlock-PASAccount -AccountID $Global:pasAccountID
     $timer.Stop()
-    Unregister-Event $global:sourceIdentifier
-    }
-Register-ObjectEvent -InputObject $timer -EventName Elapsed -SourceIdentifier $sourceIdentifier -Action $action
+})
 
+function StartTimer()
+{
+    $timer.Start()
+}
 #show the dialog
 $Form.ShowDialog() | out-null
